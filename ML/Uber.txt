@@ -1,0 +1,81 @@
+import pandas as pd
+from geopy.distance import great_circle
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Step 1: Load dataset and keep valid coordinates
+df = pd.read_csv("uber.csv")
+df = df[df['pickup_latitude'].between(-90,90) &
+        df['dropoff_latitude'].between(-90,90) &
+        df['pickup_longitude'].between(-180,180) &
+        df['dropoff_longitude'].between(-180,180)]
+
+# Step 2: Compute distance using great_circle
+df['distance_km'] = df.apply(lambda r: great_circle(
+    (r['pickup_latitude'], r['pickup_longitude']),
+    (r['dropoff_latitude'], r['dropoff_longitude'])
+).km, axis=1)
+
+# Step 3: Remove invalid fares and passengers
+df = df[(df['fare_amount']>0) & (df['passenger_count']>0) & (df['passenger_count']<=6)]
+
+# Step 4: Boxplot before removing outliers
+plt.figure(figsize=(6,3))
+sns.boxplot(x=df["fare_amount"], color="lightcoral")
+plt.title("Fare Amount Before Outlier Removal")
+plt.show()
+
+# Step 5: Remove fare outliers using IQR
+Q1 = df['fare_amount'].quantile(0.25)
+Q3 = df['fare_amount'].quantile(0.75)
+IQR = Q3 - Q1
+df = df[(df['fare_amount'] >= Q1 - 1.5*IQR) & (df['fare_amount'] <= Q3 + 1.5*IQR)]
+
+# Step 6: Boxplot after removing outliers
+plt.figure(figsize=(6,3))
+sns.boxplot(x=df["fare_amount"], color="skyblue")
+plt.title("Fare Amount After Outlier Removal")
+plt.show()
+
+# Step 7: Remove trips with zero or tiny distance
+df = df[df['distance_km'] > 0.1]
+
+# Step 8: Correlation heatmap
+sns.heatmap(df[['fare_amount','distance_km','passenger_count']].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+plt.title("Feature Correlation")
+plt.show()
+
+# Step 9: Prepare data
+X = df[['distance_km','passenger_count']]
+y = df['fare_amount']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Step 10: Train models
+lr = LinearRegression().fit(X_train, y_train)
+rf = RandomForestRegressor(n_estimators=100, random_state=42).fit(X_train, y_train)
+
+# Step 11: Predict
+y_pred_lr = lr.predict(X_test)
+y_pred_rf = rf.predict(X_test)
+
+# Step 12: Evaluate
+def evaluate(y_true, y_pred):
+    rmse = mean_squared_error(y_true, y_pred)**0.5
+    r2 = r2_score(y_true, y_pred)
+    return rmse, r2
+
+rmse_lr, r2_lr = evaluate(y_test, y_pred_lr)
+rmse_rf, r2_rf = evaluate(y_test, y_pred_rf)
+
+# Step 13: Compare
+comparison = pd.DataFrame({
+    "Model": ["Linear Regression","Random Forest"],
+    "RMSE": [rmse_lr, rmse_rf],
+    "R² Score": [r2_lr, r2_rf]
+})
+print("\nModel Comparison:")
+print(comparison)

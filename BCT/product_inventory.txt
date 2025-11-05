@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract ProductInventory {
+    uint public stock;
+
+    // Receive product
+    function receiveProduct(uint quantity) public {
+        stock += quantity;
+    }
+
+    // Sale product
+    function saleProduct(uint quantity) public {
+        require(stock >= quantity, "Not enough stock");
+        stock -= quantity;
+    }
+
+    // Display stock
+    function displayStock() public view returns (uint) {
+        return stock;
+    }
+}

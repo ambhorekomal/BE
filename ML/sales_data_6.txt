@@ -1,0 +1,106 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from sklearn.decomposition import PCA
+df = pd.read_csv("sales_data_sample.csv", encoding='latin1')
+df.head()
+df.shape
+df.info()
+#Check for missing values
+print("\nMissing values:\n", df.isnull().sum())
+# Numeric features selected for clustering
+numeric_cols = ['QUANTITYORDERED', 'PRICEEACH', 'SALES']
+
+# Drop rows with missing values in these columns
+X = df[numeric_cols].dropna()
+# Scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+print("Shape of scaled data:", X_scaled.shape)
+# Fill missing values with median
+df_numeric = df_numeric.fillna(df_numeric.median())
+# Scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(df_numeric)
+X_scaled.shape
+# Correlation heatmap
+plt.figure(figsize=(6,5))
+sns.heatmap(pd.DataFrame(X_scaled, columns=numeric_cols).corr(), annot=True, cmap='coolwarm')
+plt.title("Correlation Heatmap of Numeric Features")
+plt.show()
+# Scatter plot example: SALES vs PRICEEACH
+plt.figure(figsize=(6,4))
+sns.scatterplot(x=X['PRICEEACH'], y=X['SALES'])
+plt.title("SALES vs PRICEEACH")
+plt.show()
+# Elbow Method
+inertia = []
+k_range = range(1, 11)
+
+for k in k_range:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans.fit(X_scaled)
+    inertia.append(kmeans.inertia_)
+
+# Plot Elbow Method
+plt.figure(figsize=(6,4))
+plt.plot(k_range, inertia, 'bo-')
+plt.xlabel("Number of clusters (k)")
+plt.ylabel("Inertia")
+plt.title("Elbow Method for Optimal k")
+plt.show()
+# Choose optimal k (k=4 from elbow plot)
+k_optimal = 4
+kmeans = KMeans(n_clusters=k_optimal, random_state=42, n_init=10)
+X['cluster'] = kmeans.fit_predict(X_scaled)
+
+# Reduce to 2D using PCA for visualization
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+plt.figure(figsize=(8,5))
+plt.scatter(X_pca[:,0], X_pca[:,1], c=X['cluster'], cmap='viridis', marker='o')
+plt.xlabel("PCA 1")
+plt.ylabel("PCA 2")
+plt.title(f"K-Means Clusters Visualization (k={k_optimal})")
+plt.show()
+# Choose optimal k (k=3 from elbow plot)
+k_optimal = 3
+kmeans = KMeans(n_clusters=k_optimal, random_state=42, n_init=10)
+X['cluster'] = kmeans.fit_predict(X_scaled)
+
+# Reduce to 2D using PCA for visualization
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+plt.figure(figsize=(8,5))
+plt.scatter(X_pca[:,0], X_pca[:,1], c=X['cluster'], cmap='viridis', marker='o')
+plt.xlabel("PCA 1")
+plt.ylabel("PCA 2")
+plt.title(f"K-Means Clusters Visualization (k={k_optimal})")
+plt.show()
+# Compute linkage matrix
+Z = linkage(X_scaled, method='ward')
+
+# Plot dendrogram
+plt.figure(figsize=(10,6))
+dendrogram(Z, truncate_mode='level', p=5)
+plt.title("Hierarchical Clustering Dendrogram (truncated)")
+plt.xlabel("Samples")
+plt.ylabel("Distance")
+plt.show()
+
+# Form flat clusters (example: 4 clusters)
+clusters_h = fcluster(Z, t=4, criterion='maxclust')
+X['cluster_hier'] = clusters_h
+# Combine cluster labels with original numeric features
+X_summary = X.copy()
+X_summary[numeric_cols] = df[numeric_cols].loc[X.index]
+
+# Summary statistics per cluster
+cluster_stats = X_summary.groupby('cluster')[numeric_cols].mean()
+display(cluster_stats)
